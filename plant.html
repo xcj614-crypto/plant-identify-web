@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="植物实习">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><rect width='180' height='180' rx='30' fill='%232E7D32'/><text x='90' y='115' font-size='90' text-anchor='middle' fill='white'>🌿</text></svg>">
+    <meta name="theme-color" content="#2E7D32">
+    <!-- PWA manifest -->
+    <link rel="manifest" href="manifest.json">
+    <title>植物实习助手</title>
+    <style>
+        :root { --primary: #2E7D32; --primary-dark: #1B5E20; --bg: #F5F2E6; --card: #F1F8E9; --text: #2C3E2D; --border: #C8E6C9; --safe-bottom: env(safe-area-inset-bottom, 0px); }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+        input, textarea { user-select:text; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; background:var(--bg); color:var(--text); padding-bottom:calc(70px + var(--safe-bottom)); }
+        .app-bar { background:var(--primary); color:white; padding:15px 10px; font-size:21px; font-weight:bold; display:flex; align-items:center; position:sticky; top:0; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.15); }
+        .app-bar .back { width:40px; font-size:18px; cursor:pointer; }
+        .app-bar .title { flex:1; text-align:center; }
+        .container { max-width:500px; margin:0 auto; padding:12px; }
+        button { display:block; width:100%; padding:15px; margin-bottom:12px; font-size:20px; font-weight:bold; border:none; border-radius:14px; background:var(--primary); color:white; cursor:pointer; touch-action:manipulation; }
+        button:active { opacity:0.85; }
+        button.outline { background:transparent; color:var(--primary); border:2px solid var(--primary); }
+        .card { background:var(--card); border-radius:14px; padding:15px; margin-bottom:10px; cursor:pointer; touch-action:manipulation; }
+        .card:active { background:#E8F5E9; }
+        .badge { background:var(--border); color:var(--primary-dark); padding:3px 10px; border-radius:12px; font-size:13px; display:inline-block; cursor:pointer; }
+        .detail-section { margin-bottom:14px; }
+        .detail-section h3 { font-size:19px; color:var(--primary); border-left:5px solid var(--primary); padding-left:10px; margin-bottom:5px; }
+        .detail-section p { font-size:17px; line-height:1.6; background:#FAFAF5; padding:12px; border-radius:10px; }
+        .hidden { display:none; }
+        .preview-img { width:80px; height:80px; object-fit:cover; border-radius:10px; margin:4px; }
+        .img-container { display:flex; flex-wrap:wrap; margin-top:10px; }
+        .bottom-nav { position:fixed; bottom:0; left:0; right:0; background:white; display:flex; padding:8px 4px calc(8px + var(--safe-bottom)); box-shadow:0 -2px 10px rgba(0,0,0,0.08); z-index:100; }
+        .bottom-nav button { flex:1; font-size:12px; background:transparent; color:#666; margin:0; padding:8px 4px; border-radius:12px; box-shadow:none; display:flex; flex-direction:column; align-items:center; gap:2px; }
+        .bottom-nav button.active { color:var(--primary); background:var(--card); }
+        .toast { position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:var(--primary-dark); color:white; padding:10px 20px; border-radius:25px; font-size:16px; z-index:200; }
+        input, textarea { width:100%; padding:12px; font-size:17px; border:2px solid var(--border); border-radius:10px; margin-bottom:10px; background:white; }
+        textarea { min-height:80px; resize:vertical; }
+        .genus-sub-card { background:#E8F5E9; border-radius:10px; padding:12px; margin:8px 0 8px 20px; cursor:pointer; }
+        .genus-sub-card h4 { font-size:18px; color:#1B5E20; }
+        .genus-sub-card p { font-size:15px; color:#444; margin-top:4px; }
+        .plant-link-btn { background:#1565C0; color:white; padding:10px 16px; border-radius:10px; text-align:center; margin:10px 0; display:block; font-weight:bold; text-decoration:none; }
+        .img-note-item { display:flex; align-items:flex-start; gap:8px; margin-bottom:12px; }
+        .img-note-item img { width:80px; height:80px; object-fit:cover; border-radius:8px; flex-shrink:0; }
+        .img-note-item textarea { flex:1; min-height:60px; }
+    </style>
+</head>
+<body>
+<div class="app-bar"><span class="back" id="backBtn" style="opacity:0;">←</span><span class="title" id="titleText">🌿 植物实习助手</span><span style="width:40px;"></span></div>
+<div class="container" id="app"></div>
+<div class="bottom-nav" id="bottomNav">
+    <button onclick="renderHome()" id="navHome" class="active">🏠<br>首页</button>
+    <button onclick="renderPlantList('')" id="navList">📖<br>图鉴</button>
+    <button onclick="renderSummary()" id="navSummary">✅<br>已识别</button>
+    <button onclick="renderAddPlant()" id="navAdd">➕<br>添加</button>
+</div>
+
+<script>
+// ==================== 注册 Service Worker ====================
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(function(reg) {
+    console.log('Service Worker 注册成功', reg.scope);
+  }).catch(function(err) {
+    console.log('Service Worker 注册失败', err);
+  });
+}
+
+// ==================== 植物数据（保持不变） ====================
+var plants = [
+    { id:1, cn:"银杏", latin:"Ginkgo biloba", family:"银杏科", familyLatin:"Ginkgoaceae", genus:"银杏属", genusLatin:"Ginkgo" },
+    { id:2, cn:"马尾松", latin:"Pinus massoniana", family:"松科", familyLatin:"Pinaceae", genus:"松属", genusLatin:"Pinus" },
+    { id:3, cn:"樟", latin:"Cinnamomum camphora", family:"樟科", familyLatin:"Lauraceae", genus:"樟属", genusLatin:"Cinnamomum" },
+    { id:4, cn:"毛茛", latin:"Ranunculus japonicus", family:"毛茛科", familyLatin:"Ranunculaceae", genus:"毛茛属", genusLatin:"Ranunculus" },
+    { id:5, cn:"月季", latin:"Rosa chinensis", family:"蔷薇科", familyLatin:"Rosaceae", genus:"蔷薇属", genusLatin:"Rosa" },
+    { id:6, cn:"车前", latin:"Plantago asiatica", family:"车前科", familyLatin:"Plantaginaceae", genus:"车前属", genusLatin:"Plantago" },
+    { id:7, cn:"艾", latin:"Artemisia argyi", family:"菊科", familyLatin:"Asteraceae", genus:"蒿属", genusLatin:"Artemisia" },
+    { id:8, cn:"麦冬", latin:"Ophiopogon japonicus", family:"天门冬科", familyLatin:"Asparagaceae", genus:"沿阶草属", genusLatin:"Ophiopogon" },
+    { id:9, cn:"石竹", latin:"Dianthus chinensis", family:"石竹科", familyLatin:"Caryophyllaceae", genus:"石竹属", genusLatin:"Dianthus" },
+    { id:10, cn:"蕨", latin:"Pteridium aquilinum var. latiusculum", family:"碗蕨科", familyLatin:"Dennstaedtiaceae", genus:"蕨属", genusLatin:"Pteridium" }
+];
+
+function defaultFamilyFeatures() {
+    return {
+        "银杏科":{latin:"Ginkgoaceae", info:"落叶乔木，扇形叶二叉脉，雌雄异株，种子核果状。"},
+        "松科":{latin:"Pinaceae", info:"常绿乔木，针叶2-5针一束，球果木质。"},
+        "樟科":{latin:"Lauraceae", info:"叶离基三出脉，有香气；花被片6，雄蕊9瓣裂。"},
+        "毛茛科":{latin:"Ranunculaceae", info:"草本，花5基数，花瓣黄色，聚合瘦果。"},
+        "蔷薇科":{latin:"Rosaceae", info:"有托叶；花5基数，雄蕊多数，瘦果/核果/梨果。"},
+        "车前科":{latin:"Plantaginaceae", info:"叶基生，穗状花序，花4基数，蒴果周裂。"},
+        "菊科":{latin:"Asteraceae", info:"头状花序，雄蕊5合生，子房下位，瘦果。"},
+        "天门冬科":{latin:"Asparagaceae", info:"具根茎或鳞茎；叶弧形脉；花被片6。"},
+        "石竹科":{latin:"Caryophyllaceae", info:"茎节膨大，单叶对生，花瓣常爪状，雄蕊10。"},
+        "碗蕨科":{latin:"Dennstaedtiaceae", info:"陆生蕨，根茎横走，孢子囊群盖碗形。"}
+    };
+}
+function defaultGenusFeatures() {
+    return {
+        "银杏属":{latin:"Ginkgo", info:"落叶乔木，叶扇形，短枝簇生。"},
+        "松属":{latin:"Pinus", info:"针叶2-5针一束，球果第二年成熟。"},
+        "樟属":{latin:"Cinnamomum", info:"叶离基三出脉，有樟脑香气。"},
+        "毛茛属":{latin:"Ranunculus", info:"基生叶五角形3深裂，花黄色。"},
+        "蔷薇属":{latin:"Rosa", info:"有皮刺，羽状复叶，蔷薇果。"},
+        "车前属":{latin:"Plantago", info:"叶基生卵形，穗状花序细长。"},
+        "蒿属":{latin:"Artemisia", info:"叶常羽裂，头状花序小，有香气。"},
+        "沿阶草属":{latin:"Ophiopogon", info:"叶线形，总状花序淡紫色，块根入药。"},
+        "石竹属":{latin:"Dianthus", info:"花瓣5顶缘齿裂，蒴果圆筒形。"},
+        "蕨属":{latin:"Pteridium", info:"大型蕨类，叶三角形，孢子囊群线形。"}
+    };
+}
+
+// ==================== 本地存储函数 ====================
+function loadFamilyLib() { var s=localStorage.getItem('fLib'); return s ? JSON.parse(s) : defaultFamilyFeatures(); }
+function saveFamilyLib(lib) { localStorage.setItem('fLib', JSON.stringify(lib)); }
+function loadGenusLib() { var s=localStorage.getItem('gLib'); return s ? JSON.parse(s) : defaultGenusFeatures(); }
+function saveGenusLib(lib) { localStorage.setItem('gLib', JSON.stringify(lib)); }
+function loadCustomPlants() { try { return JSON.parse(localStorage.getItem('customPlants')||'[]'); } catch(e) { return []; } }
+function saveCustomPlants(arr) { localStorage.setItem('customPlants', JSON.stringify(arr)); }
+function loadIdentified() { try { return JSON.parse(localStorage.getItem('identified')||'[]'); } catch(e) { return []; } }
+function saveIdentified(arr) { localStorage.setItem('identified', JSON.stringify(arr)); }
+function isIdentified(id) { return loadIdentified().indexOf(id)!==-1; }
+function toggleIdentified(id) { var ids=loadIdentified(), idx=ids.indexOf(id); if(idx!==-1) ids.splice(idx,1); else ids.push(id); saveIdentified(ids); return ids.indexOf(id)!==-1; }
+function loadNote(id) {
+    var raw = localStorage.getItem('note_'+id);
+    if (!raw) return { text: '', imageNotes: [] };
+    try {
+        var note = JSON.parse(raw);
+        if (note.images && !note.imageNotes) {
+            note.imageNotes = note.images.map(function(img) { return { image: img, text: '' }; });
+            delete note.images;
+        }
+        if (!note.imageNotes) note.imageNotes = [];
+        return note;
+    } catch(e) { return { text: '', imageNotes: [] }; }
+}
+function saveNote(id, text, imageNotes) {
+    var n = loadNote(id);
+    n.text = text;
+    if (imageNotes !== undefined) n.imageNotes = imageNotes;
+    localStorage.setItem('note_'+id, JSON.stringify(n));
+}
+function allPlants() { return plants.concat(loadCustomPlants()); }
+
+var app = document.getElementById('app');
+var titleEl = document.getElementById('titleText');
+var backEl = document.getElementById('backBtn');
+var stack = [];
+
+function setNav(active) { ['navHome','navList','navSummary','navAdd'].forEach(function(id){ var el=document.getElementById(id); if(el) el.className=''; }); var a=document.getElementById(active); if(a) a.className='active'; }
+function toast(msg) { var t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(function(){t.remove();},2000); }
+function goBack() { if(stack.length>1) { stack.pop(); var prev = stack[stack.length-1]; prev.fn.apply(null, prev.args||[]); } else renderHome(); }
+
+// ==================== 页面渲染（保持原有所有功能） ====================
+function renderHome() {
+    var all=allPlants(), ident=loadIdentified().length;
+    titleEl.textContent='🌿 植物实习助手'; backEl.style.opacity='0'; setNav('navHome'); stack=[{fn:renderHome}];
+    app.innerHTML = '<div style="text-align:center;margin-bottom:15px;">📚 '+all.length+' 种植物 · ✅ '+ident+' 已识别</div>'+
+        '<button onclick="renderPlantList(\'\')">📖 植物图鉴</button><button onclick="renderSummary()">✅ 已识别植物</button><button onclick="renderAddPlant()">➕ 添加新植物</button>'+
+        '<button onclick="renderFamilyMgmt()">🏷️ 科特征管理</button><button onclick="renderGenusMgmt()">🏷️ 属特征管理</button>'+
+        '<button class="outline" onclick="exportFull()">📤 导出完整数据包</button><button class="outline" onclick="renderSettings()">⚙️ 设置</button>';
+}
+
+var groupByFamily = false;
+function renderPlantList(keyword) {
+    keyword = keyword || ''; var kw = keyword.trim().toLowerCase(); var all = allPlants();
+    if(kw) all = all.filter(function(p){ return p.cn.indexOf(kw)!==-1 || p.latin.toLowerCase().indexOf(kw)!==-1 || p.family.indexOf(kw)!==-1 || p.genus.indexOf(kw)!==-1; });
+    titleEl.textContent='植物图鉴'; backEl.style.opacity='1'; backEl.onclick=function(){ renderHome(); }; setNav('navList'); stack.push({fn:renderPlantList, args:[keyword]});
+    var html = '<div style="display:flex; gap:8px; margin-bottom:12px; position:sticky; top:56px; background:#F5F2E6; z-index:50; padding:10px 0;">'+
+        '<input type="text" id="searchInput" placeholder="搜索..." value="'+keyword.replace(/"/g,'&quot;')+'" oninput="renderPlantList(this.value)" style="flex:1; margin-bottom:0;">'+
+        '<button onclick="groupByFamily=!groupByFamily;renderPlantList(document.getElementById(\'searchInput\').value)" style="width:auto; padding:8px 16px; margin-bottom:0;">'+(groupByFamily?'📋':'📂')+'</button></div><div style="font-size:15px; color:#666; margin-bottom:8px;">共 '+all.length+' 种</div>';
+    if(!groupByFamily) { for(var i=0; i<all.length; i++) { var p = all[i]; html += '<div class="card" onclick="renderDetail('+p.id+')"><div style="display:flex; align-items:center; gap:10px;"><span style="font-size:28px;">'+(isIdentified(p.id)?'✅':'⬜')+'</span><div><h2>'+p.cn+' <span class="badge">'+p.family+'</span></h2><p>'+p.latin+' | '+p.genus+'</p></div></div></div>'; } }
+    else {
+        var families = []; all.forEach(function(p){ if(families.indexOf(p.family)===-1) families.push(p.family); }); families.sort();
+        families.forEach(function(fam){ html += '<h3 style="margin:16px 0 8px;">'+fam+'</h3>'; all.filter(function(p){ return p.family===fam; }).forEach(function(p){ html += '<div class="card" style="margin-left:10px;" onclick="renderDetail('+p.id+')"><div style="display:flex; align-items:center; gap:10px;"><span>'+(isIdentified(p.id)?'✅':'⬜')+'</span><div><h2 style="font-size:18px;">'+p.cn+'</h2><p style="font-size:14px;">'+p.latin+'</p></div></div></div>'; }); });
+    }
+    app.innerHTML = html;
+    var si = document.getElementById('searchInput'); if(si && keyword) { si.focus(); si.setSelectionRange(si.value.length, si.value.length); }
+}
+
+function renderDetail(id) {
+    var all=allPlants(), p=null; for(var i=0; i<all.length; i++) if(all[i].id===id) { p=all[i]; break; }
+    if(!p) { renderHome(); return; }
+    titleEl.textContent=p.cn; backEl.style.opacity='1'; backEl.onclick=function(){ renderPlantList(''); }; setNav('navList'); stack.push({fn:renderDetail, args:[id]});
+    var fl=loadFamilyLib(), gl=loadGenusLib(); var famInfo=fl[p.family]||{latin:'', info:''}, genInfo=gl[p.genus]||{latin:'', info:''};
+    var note=loadNote(id); var imgsHtml='';
+    if(note.imageNotes && note.imageNotes.length) {
+        imgsHtml='<div class="img-container">';
+        note.imageNotes.forEach(function(item){ imgsHtml+='<img src="'+item.image+'" class="preview-img" onclick="showLightbox(\''+item.image+'\')">'; });
+        imgsHtml+='</div>';
+    }
+    var ident = isIdentified(id);
+    app.innerHTML = '<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;"><span style="font-size:40px;">'+(ident?'✅':'⬜')+'</span><div><h1 style="font-size:24px;">'+p.cn+'</h1><p style="font-style:italic;">'+p.latin+'</p><p><span class="badge" onclick="renderFamilyDetail(\''+p.family+'\')">'+p.family+' ('+famInfo.latin+')</span> <span class="badge" onclick="renderGenusDetail(\''+p.genus+'\')">'+p.genus+' ('+genInfo.latin+')</span></p></div></div>'+
+        '<button onclick="toggleSection(\'familyFeature\')">🔬 查看科特征</button><div id="familyFeature" class="detail-section hidden"><h3>科特征</h3><p>'+famInfo.info+'</p></div>'+
+        '<button onclick="toggleSection(\'genusFeature\')">🌱 查看属特征</button><div id="genusFeature" class="detail-section hidden"><h3>属特征</h3><p>'+genInfo.info+'</p></div>'+
+        '<a href="https://www.iplant.cn/" target="_blank" class="plant-link-btn">🔍 在植物智（iPlant）中查询</a>'+imgsHtml+
+        '<button onclick="toggleAndRefresh('+p.id+')" style="background:'+(ident?'#2E7D32':'#757575')+'">'+(ident?'✅ 已识别（点击取消）':'⬜ 标记为已识别')+'</button><button onclick="renderNoteEdit('+p.id+')">📝 笔记 ('+(note.imageNotes?note.imageNotes.length:0)+'张图)</button>'+
+        (p.isCustom ? '<button style="background:#C62828;" onclick="deletePlant('+p.id+')">🗑️ 删除</button>' : '');
+}
+function toggleSection(id) { var el=document.getElementById(id); if(el) el.classList.toggle('hidden'); }
+function toggleAndRefresh(id) { toggleIdentified(id); toast(isIdentified(id)?'已标记':'已取消'); renderDetail(id); }
+function deletePlant(id) { if(confirm('确定删除？')){ var c=loadCustomPlants().filter(function(p){return p.id!==id;}); saveCustomPlants(c); localStorage.removeItem('note_'+id); toast('已删除'); renderHome(); } }
+
+// 科/属详情
+function renderFamilyDetail(family) {
+    var lib=loadFamilyLib(), info=lib[family]||{latin:'',info:''};
+    titleEl.textContent=family; backEl.style.opacity='1'; backEl.onclick=function(){ goBack(); };
+    stack.push({fn:renderFamilyDetail, args:[family]});
+    app.innerHTML='<h2 style="color:#1B5E20;">'+family+' ('+info.latin+')</h2><div class="detail-section"><h3>科特征</h3><p>'+info.info+'</p></div>'+
+        '<a href="https://www.iplant.cn/" target="_blank" class="plant-link-btn">🔍 在植物智查询</a>'+
+        '<button class="outline" onclick="renderFamilyEdit(\''+family+'\')">✏️ 编辑此科</button><button class="outline" onclick="goBack()">返回</button>';
+}
+function renderGenusDetail(genus) {
+    var lib=loadGenusLib(), info=lib[genus]||{latin:'',info:''};
+    titleEl.textContent=genus; backEl.style.opacity='1'; backEl.onclick=function(){ goBack(); };
+    stack.push({fn:renderGenusDetail, args:[genus]});
+    app.innerHTML='<h2 style="color:#1B5E20;">'+genus+' ('+info.latin+')</h2><div class="detail-section"><h3>属特征</h3><p>'+info.info+'</p></div>'+
+        '<a href="https://www.iplant.cn/" target="_blank" class="plant-link-btn">🔍 在植物智查询</a>'+
+        '<button class="outline" onclick="renderGenusEdit(\''+genus+'\')">✏️ 编辑此属</button><button class="outline" onclick="goBack()">返回</button>';
+}
+
+// 科特征管理（带属列表）
+function renderFamilyMgmt() {
+    titleEl.textContent='科特征管理'; backEl.style.opacity='1'; backEl.onclick=function(){ renderHome(); };
+    setNav('navHome'); stack.push({fn:renderFamilyMgmt});
+    var fl = loadFamilyLib(), gl = loadGenusLib(), all = allPlants();
+    var familyGenera = {};
+    all.forEach(function(p){ var fam = p.family; if(!familyGenera[fam]) familyGenera[fam] = []; if(familyGenera[fam].indexOf(p.genus)===-1) familyGenera[fam].push(p.genus); });
+    var html = '<a href="https://www.iplant.cn/" target="_blank" class="plant-link-btn" style="margin-bottom:12px;">🔍 打开植物智查询</a>';
+    html += '<button onclick="renderFamilyEdit()">➕ 添加/编辑科</button>';
+    for(var fam in fl) {
+        var info = fl[fam];
+        html += '<div class="card" style="padding:12px; margin-bottom:12px;">';
+        html += '<div onclick="renderFamilyDetail(\''+fam+'\')"><h2>'+fam+' <span class="badge">'+info.latin+'</span></h2><p style="font-size:15px; color:#555;">'+info.info.substring(0,60)+'…</p></div>';
+        var genera = familyGenera[fam] || [];
+        if(genera.length) {
+            html += '<div style="margin-top:10px; border-top:1px solid #ddd; padding-top:8px;"><p style="font-weight:bold; color:#1B5E20;">包含的属：</p>';
+            genera.sort();
+            genera.forEach(function(gen){
+                var genInfo = gl[gen] || {latin:'', info:''};
+                html += '<div class="genus-sub-card" onclick="renderGenusDetail(\''+gen+'\')"><h4>'+gen+' <span class="badge">'+genInfo.latin+'</span></h4><p>'+genInfo.info.substring(0,80)+'…</p></div>';
+            });
+            html += '</div>';
+        } else { html += '<p style="font-size:14px; color:#999; margin-top:8px;">暂无该科植物记录</p>'; }
+        html += '</div>';
+    }
+    app.innerHTML = html;
+}
+function renderGenusMgmt() {
+    titleEl.textContent='属特征管理'; backEl.style.opacity='1'; backEl.onclick=function(){ renderHome(); };
+    setNav('navHome'); stack.push({fn:renderGenusMgmt});
+    var lib = loadGenusLib();
+    var html = '<a href="https://www.iplant.cn/" target="_blank" class="plant-link-btn" style="margin-bottom:12px;">🔍 打开植物智查询</a>';
+    html += '<button onclick="renderGenusEdit()">➕ 添加/编辑属</button>';
+    for(var k in lib) { html += '<div class="card" onclick="renderGenusDetail(\''+k+'\')"><h2>'+k+' <span class="badge">'+lib[k].latin+'</span></h2><p>'+lib[k].info.substring(0,60)+'...</p></div>'; }
+    app.innerHTML = html;
+}
+
+// 科/属编辑
+function renderFamilyEdit(name) {
+    name = name || ''; var lib=loadFamilyLib(), init={cn:name, la:lib[name]?lib[name].latin:'', info:lib[name]?lib[name].info:''};
+    titleEl.textContent=name?'编辑科':'添加科'; backEl.style.opacity='1'; backEl.onclick=function(){ if(name) renderFamilyDetail(name); else renderFamilyMgmt(); };
+    stack.push({fn:renderFamilyEdit, args:[name]});
+    app.innerHTML='<input id="feCN" placeholder="科中文名" value="'+init.cn+'" '+(name?'readonly':'')+'><input id="feLA" placeholder="科拉丁名" value="'+init.la+'"><textarea id="feINFO" rows="4" placeholder="科特征描述">'+init.info+'</textarea><a href="https://www.iplant.cn/" target="_blank" class="plant-link-btn">🔍 在植物智查询</a><button onclick="saveFamily()">保存</button>';
+}
+function saveFamily() { var cn=document.getElementById('feCN').value.trim(), la=document.getElementById('feLA').value.trim(), info=document.getElementById('feINFO').value.trim(); if(!cn){toast('科名必填');return;} var lib=loadFamilyLib(); lib[cn]={latin:la, info:info}; saveFamilyLib(lib); toast('已保存'); renderFamilyMgmt(); }
+function renderGenusEdit(name) {
+    name = name || ''; var lib=loadGenusLib(), init={cn:name, la:lib[name]?lib[name].latin:'', info:lib[name]?lib[name].info:''};
+    titleEl.textContent=name?'编辑属':'添加属'; backEl.style.opacity='1'; backEl.onclick=function(){ if(name) renderGenusDetail(name); else renderGenusMgmt(); };
+    stack.push({fn:renderGenusEdit, args:[name]});
+    app.innerHTML='<input id="geCN" placeholder="属中文名" value="'+init.cn+'" '+(name?'readonly':'')+'><input id="geLA" placeholder="属拉丁名" value="'+init.la+'"><textarea id="geINFO" rows="4" placeholder="属特征描述">'+init.info+'</textarea><a href="https://www.iplant.cn/" target="_blank" class="plant-link-btn">🔍 在植物智查询</a><button onclick="saveGenus()">保存</button>';
+}
+function saveGenus() { var cn=document.getElementById('geCN').value.trim(), la=document.getElementById('geLA').value.trim(), info=document.getElementById('geINFO').value.trim(); if(!cn){toast('属名必填');return;} var lib=loadGenusLib(); lib[cn]={latin:la, info:info}; saveGenusLib(lib); toast('已保存'); renderGenusMgmt(); }
+
+// 添加植物
+function renderAddPlant() {
+    titleEl.textContent='添加植物'; backEl.style.opacity='1'; backEl.onclick=function(){ renderHome(); }; setNav('navAdd'); stack.push({fn:renderAddPlant});
+    var fl=loadFamilyLib(), gl=loadGenusLib(); var famOpts='', genOpts='';
+    for(var f in fl) famOpts+='<option value="'+f+'">'+fl[f].latin+'</option>';
+    for(var g in gl) genOpts+='<option value="'+g+'">'+gl[g].latin+'</option>';
+    app.innerHTML = '<a href="https://www.iplant.cn/" target="_blank" class="plant-link-btn">🔍 打开植物智查询</a>'+
+        '<input id="newCN" placeholder="中文名 *"><input id="newLAT" placeholder="拉丁学名">'+
+        '<label>科</label><input list="famList" id="newFAM" placeholder="输入科名筛选" onchange="autoFillFam()"><datalist id="famList">'+famOpts+'</datalist>'+
+        '<textarea id="newFAMfeat" rows="2" placeholder="科特征（选科后自动填）"></textarea>'+
+        '<label>属</label><input list="genList" id="newGEN" placeholder="输入属名筛选" onchange="autoFillGen()"><datalist id="genList">'+genOpts+'</datalist>'+
+        '<textarea id="newGENfeat" rows="2" placeholder="属特征（选属后自动填）"></textarea>'+
+        '<button onclick="submitNewPlant()">✅ 确认添加</button>';
+}
+function autoFillFam() { var v=document.getElementById('newFAM').value.trim(); var lib=loadFamilyLib(); document.getElementById('newFAMfeat').value = lib[v] ? lib[v].info : ''; }
+function autoFillGen() { var v=document.getElementById('newGEN').value.trim(); var lib=loadGenusLib(); document.getElementById('newGENfeat').value = lib[v] ? lib[v].info : ''; }
+function submitNewPlant() {
+    var cn=document.getElementById('newCN').value.trim(), la=document.getElementById('newLAT').value.trim(), fam=document.getElementById('newFAM').value.trim(), gen=document.getElementById('newGEN').value.trim()||'未知属', ff=document.getElementById('newFAMfeat').value.trim(), gf=document.getElementById('newGENfeat').value.trim();
+    if(!cn||!fam){ toast('中文名和科名必填'); return; }
+    var fl=loadFamilyLib(), gl=loadGenusLib(); if(!fl[fam]){ fl[fam]={latin:'', info:ff}; saveFamilyLib(fl); } if(gen!=='未知属' && !gl[gen]){ gl[gen]={latin:'', info:gf}; saveGenusLib(gl); }
+    var np = { id: Date.now(), cn:cn, latin:la||cn, family:fam, familyLatin:fl[fam]?fl[fam].latin:'', genus:gen, genusLatin:gl[gen]?gl[gen].latin:'', isCustom:true };
+    var c = loadCustomPlants(); c.push(np); saveCustomPlants(c); toast('已添加 '+cn); renderHome();
+}
+
+// 笔记编辑（图片与文本一一对应）
+function renderNoteEdit(id) {
+    var note = loadNote(id);
+    titleEl.textContent = '笔记'; backEl.style.opacity = '1';
+    backEl.onclick = function() { renderDetail(id); };
+    stack.push({fn: renderNoteEdit, args: [id]});
+    var html = '<div style="margin-bottom:15px;"><p style="font-weight:bold; color:#1B5E20;">📝 无图片笔记</p><textarea id="noteText" rows="3" placeholder="输入文字笔记（不关联图片）">' + note.text + '</textarea></div>';
+    html += '<div style="margin-bottom:15px;"><input type="file" id="noteFile" accept="image/*" multiple><p style="font-size:14px; color:#888;">上传图片后，下方会自动出现对应文本框</p></div>';
+    html += '<div id="imageNotesContainer">';
+    if (note.imageNotes && note.imageNotes.length > 0) {
+        note.imageNotes.forEach(function(item, index) {
+            html += buildImageNoteItem(index, item.image, item.text);
+        });
+    }
+    html += '</div>';
+    html += '<button onclick="saveNoteAndBack('+id+')">💾 保存笔记</button>';
+    app.innerHTML = html;
+
+    var fileInput = document.getElementById('noteFile');
+    fileInput.addEventListener('change', function() {
+        var files = Array.prototype.slice.call(fileInput.files);
+        files.forEach(function(file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var container = document.getElementById('imageNotesContainer');
+                var newIndex = container.querySelectorAll('.img-note-item').length;
+                var newItem = buildImageNoteItem(newIndex, e.target.result, '');
+                container.insertAdjacentHTML('beforeend', newItem);
+                var lastItem = container.lastElementChild;
+                lastItem.querySelector('.delete-img-btn').addEventListener('click', function() { lastItem.remove(); });
+            };
+            reader.readAsDataURL(file);
+        });
+        fileInput.value = '';
+    });
+    document.querySelectorAll('.delete-img-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { this.closest('.img-note-item').remove(); });
+    });
+}
+function buildImageNoteItem(index, imageSrc, text) {
+    return '<div class="img-note-item"><img src="'+imageSrc+'" class="preview-img" onclick="showLightbox(\''+imageSrc+'\')" style="cursor:pointer;"><textarea class="img-note-text" rows="3" placeholder="描述这张图片...">'+text+'</textarea><button type="button" class="delete-img-btn" style="width:auto; padding:4px 8px; margin:0; background:#C62828; font-size:14px;">✕</button></div>';
+}
+function saveNoteAndBack(id) {
+    var text = document.getElementById('noteText').value.trim();
+    var imageNotes = [];
+    var items = document.querySelectorAll('#imageNotesContainer .img-note-item');
+    items.forEach(function(item) {
+        var img = item.querySelector('img');
+        var txt = item.querySelector('textarea.img-note-text');
+        if (img && txt) { imageNotes.push({ image: img.src, text: txt.value.trim() }); }
+    });
+    saveNote(id, text, imageNotes);
+    toast('笔记已保存');
+    renderDetail(id);
+}
+
+// 已识别 & 导出Word
+function renderSummary() {
+    var ids=loadIdentified(), all=allPlants().filter(function(p){return ids.indexOf(p.id)!==-1;});
+    titleEl.textContent='已识别植物'; backEl.style.opacity='1'; backEl.onclick=function(){ renderHome(); }; setNav('navSummary'); stack.push({fn:renderSummary});
+    if(all.length===0){ app.innerHTML='<div style="text-align:center;padding:40px;">📭<br>还没有识别任何植物</div>'; return; }
+    var html='<button onclick="exportWordReport()" style="background:#1565C0;">📄 导出 Word 报告（按科分类）</button>';
+    all.forEach(function(p){ var n=loadNote(p.id); html+='<div class="card" onclick="renderDetail('+p.id+')"><h2>'+p.cn+' <span class="badge">'+p.family+'</span></h2><p>'+p.latin+' | '+p.genus+'</p>'+(n.text?'<p>📝 '+n.text.substring(0,40)+'</p>':'')+'</div>'; });
+    app.innerHTML=html;
+}
+function exportWordReport() {
+    var ids = loadIdentified(); var all = allPlants().filter(function(p){ return ids.indexOf(p.id) !== -1; });
+    if(all.length === 0) { toast('没有已识别植物'); return; }
+    var fl = loadFamilyLib(); var gl = loadGenusLib();
+    var familyMap = {};
+    all.forEach(function(p){ var fam = p.family || '未知科'; var gen = p.genus || '未知属'; if(!familyMap[fam]) familyMap[fam] = {}; if(!familyMap[fam][gen]) familyMap[fam][gen] = []; familyMap[fam][gen].push(p); });
+    var familyNames = Object.keys(familyMap).sort();
+    var html = '<html><head><meta charset="UTF-8"><title>野外实习植物报告</title><style>body{font-family:SimSun,STSong,serif; margin:20px; line-height:1.8;} h2{color:#2E7D32; border-bottom:2px solid #2E7D32;} .fam-feature{background:#f0f7e8; padding:10px; margin:10px 0;} .genus-block{margin-left:20px; margin-bottom:20px;} .plant-block{margin:10px 0; padding:10px; border:1px solid #ddd;} .img-container{overflow:hidden; margin:10px 0;} .img-container img{width:200px; height:auto; margin:5px; display:inline-block; float:left;}</style></head><body>';
+    html += '<h1 style="text-align:center;">野外实习植物识别报告</h1><p>导出时间：'+new Date().toLocaleString()+'</p><p>共识别 '+all.length+' 种植物，分属 '+familyNames.length+' 个科。</p>';
+    familyNames.forEach(function(fam){
+        var famInfo = fl[fam] || {latin:'', info:''};
+        html += '<h2>'+fam+' ('+famInfo.latin+')</h2><div class="fam-feature"><b>科特征：</b>'+famInfo.info+'</div>';
+        var genera = Object.keys(familyMap[fam]).sort();
+        genera.forEach(function(gen){
+            var genInfo = gl[gen] || {latin:'', info:''};
+            html += '<div class="genus-block"><h3>属：'+gen+' ('+genInfo.latin+')</h3><p><b>属特征：</b>'+genInfo.info+'</p>';
+            familyMap[fam][gen].forEach(function(p){
+                html += '<div class="plant-block"><h4>'+p.cn+' <small>('+p.latin+')</small></h4>';
+                var note = loadNote(p.id);
+                if(note.text) html += '<p><b>笔记：</b>'+note.text+'</p>';
+                if(note.imageNotes && note.imageNotes.length > 0) {
+                    html += '<p><b>照片与描述：</b></p><div class="img-container">';
+                    note.imageNotes.forEach(function(item) {
+                        html += '<div style="margin:5px;">';
+                        html += '<img src="'+item.image+'" style="width:200px;" />';
+                        if(item.text) html += '<p style="font-size:14px;">'+item.text+'</p>';
+                        html += '</div>';
+                    });
+                    html += '<div style="clear:both;"></div></div>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+        });
+    });
+    html += '<hr><p style="text-align:center;color:#888;">植物实习助手生成</p></body></html>';
+    var blob = new Blob([html], {type:'application/msword'}); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '野外实习植物报告.doc'; a.click(); toast('Word 报告已生成');
+}
+
+// 导出完整数据包
+function exportFull() {
+    var fl = loadFamilyLib(), gl = loadGenusLib(), cp = loadCustomPlants(), ident = loadIdentified(), notes = {};
+    cp.forEach(function(p){ notes[p.id] = loadNote(p.id); });
+    var dataScript = '<script>\n'+
+        'var __FL = '+JSON.stringify(fl)+';\n'+
+        'var __GL = '+JSON.stringify(gl)+';\n'+
+        'var __CP = '+JSON.stringify(cp)+';\n'+
+        'var __ID = '+JSON.stringify(ident)+';\n'+
+        'var __NOTES = '+JSON.stringify(notes)+';\n'+
+        'localStorage.setItem("fLib", JSON.stringify(__FL));\n'+
+        'localStorage.setItem("gLib", JSON.stringify(__GL));\n'+
+        'localStorage.setItem("customPlants", JSON.stringify(__CP));\n'+
+        'localStorage.setItem("identified", JSON.stringify(__ID));\n'+
+        'for(var pid in __NOTES) localStorage.setItem("note_"+pid, JSON.stringify(__NOTES[pid]));\n'+
+        'document.addEventListener("DOMContentLoaded", function() { if(typeof renderHome==="function") renderHome(); });\n'+
+        '<\/script>\n';
+    var currentHTML = document.documentElement.outerHTML;
+    var newHTML = currentHTML.replace('</head>', dataScript + '</head>');
+    var blob = new Blob([newHTML], {type:'text/html'});
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '植物实习_完整数据包.html'; a.click();
+    toast('数据包已生成！');
+}
+
+// 设置
+function renderSettings() {
+    titleEl.textContent='设置'; backEl.style.opacity='1'; backEl.onclick=function(){ renderHome(); }; stack.push({fn:renderSettings});
+    app.innerHTML = '<div class="detail-section"><h3>关于</h3><p>植物实习助手 v7.5 PWA<br>内置10种植物，支持离线使用，可安装到桌面。</p></div>'+
+        '<div class="detail-section"><h3>数据</h3><p>总植物：'+allPlants().length+' · 已识别：'+loadIdentified().length+'</p></div>'+
+        '<button class="outline" style="border-color:#C62828;color:#C62828;" onclick="if(confirm(\'清除所有数据？\')){localStorage.clear();location.reload();}">🗑️ 清除所有数据</button>';
+}
+
+function showLightbox(src) { var d=document.createElement('div'); d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:999;display:flex;align-items:center;justify-content:center;'; d.innerHTML='<span style="position:absolute;top:20px;right:20px;color:white;font-size:30px;cursor:pointer;">✕</span><img src="'+src+'" style="max-width:95%;max-height:90vh;">'; d.querySelector('span').onclick=function(){d.remove();}; d.onclick=function(e){if(e.target===d)d.remove();}; document.body.appendChild(d); }
+
+renderHome();
+</script>
+</body>
+</html>
